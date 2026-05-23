@@ -30,7 +30,7 @@ install(TARGETS catlib
 #  LIBRARY
 #  DESTINATION ${PROJECT_SOURCE_DIR}/api/lib)
 
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/include
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/source/include
   DESTINATION  ${PROJECT_SOURCE_DIR}/api)
 
 add_subdirectory(./test/DRM ./test/DRM/BUILD)

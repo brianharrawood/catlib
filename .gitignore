@@ -1,3 +1,7 @@
 BUILD/
 bin/
+api/lib/
+api/include/
+docs/html
+docs/latex
 *~

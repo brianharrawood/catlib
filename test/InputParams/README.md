@@ -1,0 +1,126 @@
+Input Parameters Example
+===============================
+
+This is a simple example of using the `catlib::InputParameters` to
+capture a collection of parameters for a program. It is just intended
+to demonstrate the interplay of the `InputParams` class with the
+ParamTemplates and derived classes.
+
+Build and Run
+-------------
+
+Like other code in the CTkit, this project is designed for a Linux
+system.
+
+The project links to the catlib library in it's BUILD folder,
+therefore that must be built before this example program can be built.
+
+This project also depends on libz, libpthread, and libcrypto.
+
+To assure you have the dependencies installed:
+
+    % sudo apt update -y
+    % sudo apt install libz libpthread openssl -y
+
+To build, start in the project root:
+
+    % mkdir BUILD; cd BUILD
+    % CMake ../
+    % make
+
+To run and test, start in the project root:
+
+    % cd run
+    % ./IPtest
+
+The Parameter File
+------------------
+
+The example parameter file is in the hard_coded location of
+run/input/params.txt. The file provided is:
+
+    # comment
+
+    PointOnLine: 3.14
+    NumberOfPoints: 10
+  
+    Names:  Alice
+    Names:  Bob
+    Names:  Carol
+
+    Voter: {Alice, yes, D, Orange}
+    Voter: {Bob,   yes, R, Wake}
+    Voter: {Carol, yes, I, Mecklenburg}
+
+The `InputParams` class parses this file and makes all of the
+parameters available to the application through a standard interface.
+
+Each tag is comprised of a tag name followed by a value for the tag,
+using the ':' character as a delimiter. The value ends with a newline
+character.
+
+Tags must be specified as a `ParamTemplate` struct (defined in
+ParamTemplates.hh) and stored in a vector. The `myParamTemplate.hh`
+shows how this is done for this example.
+
+    const std::vector<ParamTemplate> my_templates =
+      {
+        // DRM test
+        // tag name            data_t   single tag_t
+        {"PointOnLine",        float_T, true,  app_T}, 
+        {"NumberOfPoints",       int_T, true,  app_T}, 
+        {"Names",               user_T, false, app_T}, 
+        {"Voter",               user_T, false, app_T}, 
+      };
+
+The first of the four fields of the structure is the tag name. The
+second field is the data type. The data type is an enumerated type:
+
+   enum data_t {
+     string_T,
+     int_T,
+     float_T,
+     bool_T,
+     user_T,
+     no_T,
+   };
+
+If the data for the tag is a string, an integer, a float, or boolean;
+then, there is a built-in tag type to use. Otherwise, if the tag data
+is a user defined type, then the `user_T` should be specified.
+
+In our example templates above, Names and Voters are both user_T. Even
+though Names will turn out to be a string type, we want to input a
+vector of Names.  Similarly, a list of Voters may be input as well.
+
+The third field is a boolean which lets the class know if more than
+one of these tags is permitted. This is set to false for both of the
+two ''list'' parameters. 
+
+The user_T parameters require extra coding for the application. An
+application class is derived from `InputParams` class provided by the
+library (see myParams.hh and myParams.cc). The derived class then
+defines a version of the virtual function `load_user_params()` to
+handle the parameters which are user_T.
+
+An example of this derived function is in the file myParams.cc. The
+base class catches all tags with templates marked as user_T and passes
+them into this function. Here there are parsed and loaded into the
+derived class.
+
+Usage
+-----
+
+The main() function in IPtest.cc demonstrates the use of this
+class. The class derived from the InputParams class is created with
+the template vector defined in `myParamTemplate.hh` as an argument.
+
+   myParams * the_params = new myParams(my_templates);
+
+Then the parameter file is passed into the loadParams() member
+function. This parses the file and loads all parameters into the
+object. The Dump() method prints the parameters, after being digested
+by the object, back into a file.
+
+Examples are also contained in this file for extracting tagged data
+out of the object.

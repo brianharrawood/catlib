@@ -1,0 +1,56 @@
+CTkit catlib library
+====================
+
+The catlib library is a collection of support functions for the CTkit
+simulation programs. The test folder in the project root has example
+programs which link with the library and demonstrate how to use its
+features.
+
+The specific features of the library described in the test folder
+include:
+
+- DistributedRunManager Class
+- InputParams Class
+- XCATPhantomCompress Class
+- FileIO Class
+
+In addition to these feature, the library also has a thread locking
+class SyncLock which now has a standard library drop in
+replacement. SynLock should be replaced with std::lock_guard in a
+future release. Yes, SyncLock was written before C++-11 was available! 
+
+The Sha256.cc file has a pair of functions which generate SHA256
+hashes; one for files and one for strings. These functions are used
+for security for the DistributedRunManager's network handshake.
+
+The libary also contains a Log class which is currently unused.
+
+Build and Test
+--------------
+
+Like other code in the CTkit, this project is designed for a Linux
+system.
+
+The library uses libz, libpthread, and libcrypto. 
+
+To assure you have the dependencies installed:
+
+    % sudo apt update -y
+    % sudo apt install libz libpthread openssl -y
+
+To build, start in the project root:
+
+    % mkdir BUILD; cd BUILD
+    % cmake ../
+    % make
+    % make install
+    % make docs
+    
+This command sequence will build the library, install it, and build
+the test programs. The library is installed in the project's api
+folder. Make docs will build the html documentation in the docs folder.
+
+Each test folder contains a detailed README file describing the test
+program. These may be individually built in their own local BUILD
+folders.
+

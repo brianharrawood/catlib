@@ -1,0 +1,153 @@
+Distributed Run Manager Example
+===============================
+
+This is a simple example of using the Distributed Run Manager (DRM) to
+run many processes to estimate the value of pi using Monte Carlo
+analysis.
+
+Build and Run
+-------------
+
+Like other code in the CTkit, this project is designed for a Linux
+system.
+
+The project links to the catlib library in it's BUILD folder,
+therefore that must be built before this example program can be built.
+
+This project also depends on libz, libpthread, and libcrypto. It may
+require libbsd if your system does not include support for the
+`arc4random` random number generator (included in Ubuntu 24.04 and
+after). If you DO have an older system without `arc4random`, you will
+also need to tweak the CMakeLists.txt file and the TheTask.cc file to
+have the build include the proper files.
+
+To assure you have the dependencies installed:
+
+    % sudo apt update -y
+    % sudo apt install libz libpthread openssl libbsd -y
+
+To build, start in the project root:
+
+    % mkdir BUILD; cd BUILD
+    % CMake ../
+    % make
+
+To run and test, start in the project root:
+
+    % cd run
+    % ./DRMtest -f params.txt
+
+
+
+The Estimation
+--------------
+
+The analysis technique is to randomly assign ''many'' points inside a
+unit square. A quarter of a circle is inscribed in the square. The
+number of points which fall within that inscribed area are used a
+proxy for the area, and pi is back calculated from the area and
+radius.
+
+The function `do_an_estimate()` defined in `src/TheTask.cc` gets the
+parameter for the number of points per ticket, loops over the random
+selection of those points and then calculates an estimate of pi. The
+results are output into a file.
+
+The Distribution
+----------------
+
+To magnify the power of the estimate it must be performed many
+times. The `do_an_estimate()` function does a number of points in a
+serial fashion. Using the DRM, this function can be called many times
+in parallel on this host (and other hosts on this subnet) to speed the
+calculation.
+
+The Code
+----------------
+
+The `DRMtest.cc` file shows the basic steps to distribute our task to
+other processes. The steps are broken down into:
+
+### Gather Input
+
+The catlib provides a helper class, `InputParams`, which is designed
+to assist the DRM with parameter handling. An example of how to use
+the class is provided in the `test/InputParams` folder. This class
+enables the DRM server to transfer parameters on the network to DRM
+clients.
+
+In this example, two parameters are expected from an input file
+specifying the number of tasks to run and the number of estimates made
+per task. Additional parameters are accepted from the command line
+directing the DRM to use a particular network port and whether or not
+to use the restart facility.
+
+### Create Management Classes
+
+With the input parsed, a network key is chosen for the analysis. This
+is simply a string which uniquely identifies processes which will
+cooperate on this port for this distribution. In this example, the
+current working directory is used.
+
+
+The `DistributedRunManager` is then created by executing the line:
+
+    DistributedRunManager DRM(&inputParams, restart_prior_run, net_key, port);
+
+The DRM needs to know how to execute each ticket. This execution is
+handled in a callback function. In this example that function is in
+the TheTask.cc file:
+
+    void do_an_estimate(int ticket_number, void * arg)
+    {
+	...see TheTask.cc
+    }
+
+The callback function is passed into the `TicketManager` class and
+then that class is registered with the `DistributedRunManager` class:
+
+    // the function which processes each ticket
+    catlib::DRMCallbackFunc_t callback_func = do_an_estimate;
+    
+    // the ticket manager tracks which ticket is next
+    // and when the job is done
+    TestTicketManager myTicketManager(callback_func, &inputParams);
+    
+    DRM.RegisterTicketManager(&myTicketManager);
+
+Note, in this example the address of the `InputParams` class is passed
+into the `callback_func` as a pointer to void.
+
+### Running the distribution
+
+The call to:
+
+    DRM.RunTickets()
+
+begins the one-by-one execution of the tickets (i.e., NumberOfTickets
+in parameter file) across the distribution. The size of the
+distribution is determined by how many process are started with this
+key on this port. A single process will run through all tickets, but
+with multiple processes, the CPU load will be divided among many
+processes to speed the application.
+
+For instance:
+
+    % cd run_dir
+    % ./DRMtest -f params &
+    % ./DRMtest -f params &
+    % ./DRMtest -f params &
+    % ./DRMtest -f params &
+
+Will start 4 process on the current host. If you have the same
+directory available on other hosts, you can also:
+
+    % ssh hostB
+    %hostB: cd run_dir
+    %hostB: ./DRMtest -f params &
+    %hostB: ./DRMtest -f params &
+    %hostB: ./DRMtest -f params &
+    %hostB: ./DRMtest -f params &
+
+And you will now have 8 processes running in the distribution.
+

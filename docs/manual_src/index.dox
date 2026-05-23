@@ -1,0 +1,80 @@
+/**
+
+\mainpage catlib User Manual
+
+Introduction
+------------
+
+The catlib library (*libcat.a*) is a collection of C++ classes which
+are common to the CTkit applcations and generally play a supporting
+role. This documentation is provided in the hope that some of these
+may find more general utility.
+
+Library Components
+------------------
+
+The three main components of the library are:
+
+- DistributedRunManager
+- InputParameters
+- XCATCompressor
+
+### DistributedRunManager ###
+
+
+The distributed run manager (i.e., DRM) is a singleton class which
+distributes a parallel application to multiple process and/or multiple
+hosts. The DRM uses a client/server model and cooperatively elects a
+server to maintain the state of the distributed process. An article is
+provided (<a href="../articles/DRM.pdf">here</a> ) to
+explain the design of the tool.
+
+This tool is primarily encoded in four C++ classes in the library. They are:
+
+- `DistributedRunManager`
+- `ElectionManager`
+- `Ticket`
+- `TicketManager`
+
+A detailed example is include in the library's `test/DRM` folder.
+
+### InputParameters ###
+
+The InputParameters feature of the library is a tool for translating a
+parameter file into values which can be used in an application. The
+parameter file is formatted, per line, as:
+
+tag: value
+
+InputParameters allows an application designer to define tag names and
+value formats for easy storage and retrieval.
+
+This tool is primarily encoded in four C++ classes in the library. They are:
+
+- `InputParams`
+- `ParamItem`
+- `ParamTemplates`
+
+A detailed example is include in the library's `test/InputParams` folder.
+
+### XCATPhantomCompressor ###
+
+The XCATPhantomCompressor tool is designed to compress a large file of
+repeating integers in such a way that they may be extracted without
+decompressing the entire file. It is a two stage process.
+
+First, the file is compressed using Run Length Encoding (RLE). This
+technique simply counts the number of repeating values until a new
+value is encountered. The start location, end location and the value
+are stored in a `tree_key` struct.
+
+The Second step is to create a B-tree of these structs to improve
+search time from O(n) to O(log(n)). Additionally, there is no
+requirement to ''de-compress'' anything. This technique is perfectly
+suited for compressing phantoms for use in memory on GPU platforms.
+
+This tool is completely encoded with the single class,
+`XCATPhantomCompress`. A detailed example is include in the library's
+`test/XCATPhantomCompress` folder.
+
+*/

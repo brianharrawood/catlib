@@ -1,0 +1,31 @@
+/**
+
+\page "2. Build and Test"
+ 
+Like other code in the CTkit, this project is designed for a Linux
+system.
+
+The library uses libz, libpthread, and libcrypto. 
+
+To assure you have the dependencies installed:
+
+    % sudo apt update -y
+    % sudo apt install libz libpthread openssl -y
+
+To build, start in the project root:
+
+    % mkdir BUILD; cd BUILD
+    % cmake ../
+    % make
+    % make install
+    % make docs
+    
+This command sequence will build the library, install it, and build
+the test programs. The library is installed in the project's api
+folder. Make docs will build the html documentation in the docs folder.
+
+Each test folder contains a detailed README file describing the test
+program. These may be individually built in their own local BUILD
+folders.
+
+**/

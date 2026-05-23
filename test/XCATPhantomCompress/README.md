@@ -1,0 +1,116 @@
+XCAT Phantom Compress Example
+=============================
+
+This is a simple example/exerciser of the
+`catlib::XCATPhantomCompress` to compress phantom files for use on GPU
+platforms. It reduces the memory footprint and allows read access.
+
+The file format for the compressor is indicate with a .rle suffix. The
+compressed files written by the compressor contain a header and the
+.rle name is simply a ''human'' convention.
+
+The class can read phantom files in raw, gzip, or rle formats. It can
+also write files in each of those formats. The B-Tree search feature
+of the compression requires the use of pointer data. The class will
+''re-locate'' a compressed buffer to a new memory location.
+
+Build and Run
+-------------
+
+Like other code in the CTkit, this project is designed for a Linux
+system.
+
+The project links to the catlib library in it's BUILD folder,
+therefore that must be built before this example program can be built.
+
+This project also depends on libz.
+
+To assure you have the dependencies installed:
+
+    % sudo apt update -y
+    % sudo apt install libz -y
+
+To build, start in the project root:
+
+    % mkdir BUILD; cd BUILD
+    % CMake ../
+    % make
+
+To run and test, start in the project root:
+
+    % cd run
+    % ./XCATCompress
+
+
+The Compression Test
+--------------------
+
+The XCAT_compress.cc file runs multiple tests using the
+`XCATPhantomCompress` class.
+
+The program reads in a raw (actually gzipped) phantom, compresses it
+with the `XCATPhantomCompress` and then compares a selection of the
+''raw'' values with the ''compressed'' values to assure accuracy.
+
+The compressed phantom is written to file. The `XCATPhantomCompress`
+object is reloaded with this file.
+
+Then a speed test is performed to determine the lookup time between
+direct memory access with the raw phantom to a B-tree search in the
+compressed phantom. The voxels searched are randomized (worst case for
+B-tree).
+
+After the base test completes, a series of other permutations of this
+test are used to exercise the class. The program is memory
+intensive. The input phantom is over 7 GB and total run time may be
+as much as 30 minutes.
+
+The Compression Algorithm
+-------------------------
+
+The phantom file is expected to be a long string on integers within a
+narrow range (e.g., 0-255). The data are highly organized and are
+ideal for Run Length Encoding (RLE). The RLE compresses the file data
+into a linked list of RLE-nodes (`struct tree_key` in
+XCATPhantomCompress.hh). Each node has a start and end voxel and the
+unique voxel value for all voxels in between.
+
+This reduces the size of a ''normal'' phantom considerably; the 7.3 GB
+phantom in the test is reduced to about 0.5 GB. However, doing a
+lookup between voxel number (i.e., location) and voxel value now
+requires searching through all these nodes sequentially with an O(n)
+efficiency.
+
+Therefore, the nodes are organized into a B-Tree. This data structure
+speeds the data lookup from O(n) to O(ln(n)).  Additionally, if it is
+known that the next voxel you will be searching for is adjacent to the
+last voxel you looked up, the speed of the lookup can again be helped
+with this geometric information by restarting your tree search in the
+vicinity of your last lookup.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

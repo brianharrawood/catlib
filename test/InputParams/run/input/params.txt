@@ -1,0 +1,12 @@
+# comment
+
+PointOnLine: 3.14
+NumberOfPoints: 10
+
+Names:  Alice
+Names:  Bob
+Names:  Carol
+
+Voter: {Alice, yes, D, Orange}
+Voter: {Bob,   yes, R, Wake}
+Voter: {Carol, yes, I, Mecklenburg}

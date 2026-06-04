@@ -29,15 +29,7 @@ size_t FileIO::read_txt_file(std::string &file_name, char ** file_buffer)
   
   if(!*file_buffer){
     // exception
-    std::ostringstream stringStream;
-    stringStream << "Memory exhausted reading file '" << file_name << "'." << std::endl;
-    stringStream << "Failed to allocate " << file_buffer_len << " bytes." << std::endl;
-    
-    Exception_t e;
-    e.message = stringStream.str();
-    
-    fclose(file_ptr);
-    throw (e);
+    AllocationException(__FILE__, __LINE__, file_buffer_len);
   }
   
   // zero buffer

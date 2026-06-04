@@ -27,12 +27,13 @@ int main(int argc, char ** argv)
   //
   try {
     std::cerr << "XCAT (rle) Compressing Phantom: " << phantom_file << std::endl;
-    compressor.CompressFile(phantom_file);
+    compressor.LoadFile(phantom_file);
   } catch (Exception_t e) {
     std::cerr << e.message << std::endl;
     exit(EXIT_FAILURE);
   }
 
+#if 1
   {
     std::cerr << "Base test" << std::endl;
     // test
@@ -42,7 +43,8 @@ int main(int argc, char ** argv)
     std::cerr << "Speed test..." << std::endl;
     speed_test(raw_buffer, raw_size, compressor, default_root);
   }
-
+#endif
+  
   // writes to local dir
   int rc = compressor.WriteCompressedFile();
   
@@ -56,12 +58,13 @@ int main(int argc, char ** argv)
   
   try {
     std::cerr << "Phantom: " << phantom_file << std::endl;
-    compressor.CompressFile(phantom_file);
+    compressor.LoadFile(phantom_file);
   } catch (Exception_t e) {
     std::cerr << e.message << std::endl;
     exit(EXIT_FAILURE);
   }
   
+#if 1
   {
     // test
     std::cerr << "Comparing raw values with compressed values" << std::endl;
@@ -70,7 +73,8 @@ int main(int argc, char ** argv)
     std::cerr << "Speed test..." << std::endl;
     speed_test(raw_buffer, raw_size, compressor, default_root);
   }
-
+#endif
+  
   //
   // read relocated buffer test
   // 
@@ -87,6 +91,7 @@ int main(int argc, char ** argv)
   // adjust the pointers at the new location
   tNode_t * relocated_root = compressor.RelocateCompressionBuffer(relocated_buf);
     
+#if 1
   {
     std::cerr << "relocation test" << std::endl;
     // test
@@ -96,11 +101,26 @@ int main(int argc, char ** argv)
     std::cerr << "Speed test..." << std::endl;
     speed_test(raw_buffer, raw_size, compressor, relocated_root);
   }
-
+#endif
+  
   delete [] raw_buffer;
 
-  unlink("./phantom_2150_2150_1600_.bin.rle");
-    
+  //
+  // read phantom to raw
+  //
+  compressor.LoadFile(phantom_file, false);
+
+  raw_buffer = compressor.getRawBuffer(&raw_size);
+
+  {
+    std::cerr << "relocation test" << std::endl;
+    // test
+    std::cerr << "Loaded Raw Buffer - Comparing raw values with relocated compressed values..." << std::endl;
+    compare_values(raw_buffer, raw_size, compressor, relocated_root);
+  }  
+  
+  unlink(phantom_file.c_str());
+
   std::cerr << "No errors." << std::endl;
   
   return(0);

@@ -2,65 +2,86 @@
 #include "FileIO.hh"
 #include <fcntl.h>
 #include <algorithm>
+#include <cassert>
 
 using namespace catlib;
 
-XCATPhantomCompress::XCATPhantomCompress():phantom_buffer_(0), phantom_size_(0), num_keys_(0), key_buffer_(0), num_nodes_(0), node_buffer_(0), compressed_buffer_(0), compressed_size_(0), key_offset_(0), root_(0)
+XCATPhantomCompress::XCATPhantomCompress():phantom_file_buffer_(0), phantom_file_size_(0), num_keys_(0), key_buffer_(0), num_nodes_(0), node_buffer_(0), compressed_buffer_(0), compressed_size_(0), raw_buffer_(0), raw_size_(0), key_offset_(0), root_(0)
 {
   ;
 }
 
 XCATPhantomCompress::~XCATPhantomCompress()
 {
-  delete [] phantom_buffer_;
+  delete [] phantom_file_buffer_;
   delete [] compressed_buffer_;
+  delete [] raw_buffer_;
 }
 
 void XCATPhantomCompress::reset()
 {
-  delete [] phantom_buffer_;
-  delete [] compressed_buffer_;
   material_map_.clear();
-  phantom_buffer_    = 0;
-  phantom_size_      = 0;
-  num_keys_          = 0;
-  key_buffer_        = 0;
-  num_nodes_         = 0;
-  node_buffer_       = 0;
-  compressed_buffer_ = 0;
-  compressed_size_   = 0;
-  key_offset_        = 0;
-  root_              = 0;
+
+  delete [] phantom_file_buffer_;
+  delete [] compressed_buffer_;
+  delete [] raw_buffer_;
+
+  phantom_file_buffer_ = 0;
+  phantom_file_size_   = 0;
+  compressed_buffer_   = 0;
+  compressed_size_     = 0;
+  raw_buffer_          = 0;
+  raw_size_            = 0;
+  num_keys_            = 0;
+  key_buffer_          = 0;
+  num_nodes_           = 0;
+  node_buffer_         = 0;
+  key_offset_          = 0;
+  root_                = 0;
 }
 
-tNode_t * XCATPhantomCompress::CompressFile(std::string XCATFile)
+// a file must be loaded before other methods are called
+bool XCATPhantomCompress::LoadFile(std::string XCATFile, bool do_compression)
 {
   reset();
   
   PhantomFile_ = XCATFile;
+  
+  // read file
+  catlib::FileIO filer;
+  phantom_file_size_ = filer.read_file(PhantomFile_, &phantom_file_buffer_);
 
-  try {
-    // read file
-    catlib::FileIO filer;
-    phantom_size_ = filer.read_file(PhantomFile_, &phantom_buffer_);
-
-    bool is_already_XCATcompressed = check_header(phantom_buffer_);
-    
-    if(is_already_XCATcompressed){
-      // relocate phantom_buffer_ to compress_buffer_
-      input_type_ = CmpInput;
-      import_phantom();
-    }
-    else {
-      // raw phantom input
-      input_type_ = RawInput;
-      compress();
-    }
-  } catch (Exception_t e) {
-    throw(e);
+  // the buffer maybe either raw or rle_compressed
+  bool is_already_XCATcompressed = check_header(phantom_file_buffer_);
+  
+  if(is_already_XCATcompressed){
+    // phantom_file_buffer is compressed
+    // relocate phantom_file_buffer_ to compress_buffer_
+    import_phantom();
+    input_type_ = CmpInput;
+  }
+  else {
+    // phantom_file_buffer is raw
+    // compress regardless of 'do_compression' for material map
+    compress();
+    input_type_ = RawInput;
   }
 
-  return(root_);
+  // for uncompressed raw
+  //
+  if(!do_compression && (input_type_ == RawInput)){
+    // move phantom_file_buffer to raw_buffer
+    raw_buffer_ = phantom_file_buffer_;
+    raw_size_   = phantom_file_size_;
+    phantom_file_buffer_ = 0;	
+  }
+  else if(!do_compression && (input_type_ == CmpInput)){
+    // Want raw buffer but input is compressed.  Uncompress phantom to
+    // raw: this sets raw_buffer_ and raw_buffer_size_
+    rle_uncompress();
+   }
+    
+  return(true);
 }
 
 unsigned int
@@ -110,15 +131,17 @@ XCATPhantomCompress::getVoxelValue(unsigned long voxel_id, tNode_t * root)
   return(0);
 }
 
+// compress phantom_file_buffer_
+// into compressed_buffer_
 void
 XCATPhantomCompress::compress()
 {
   // compresses and creates b-tree, originally in vector containers,
   // then relocated into a compress_buffer_
   std::vector<tKey_t> key_vector;
-  key_vector.reserve(phantom_size_/100);
+  key_vector.reserve(phantom_file_size_/100);
   
-  rle_compress(phantom_buffer_, phantom_size_, key_vector);
+  rle_compress(phantom_file_buffer_, phantom_file_size_, key_vector);
   
   num_keys_ = key_vector.size();
   key_buffer_ =  (tKey_t *)key_vector.data();
@@ -159,14 +182,7 @@ XCATPhantomCompress::compress()
 
   if(compressed_buffer_ == 0){
     // exception
-    std::ostringstream stringStream;
-    stringStream << "Memory exhausted " << std::endl;
-    stringStream << "Failed to allocate " << compressed_size_ << " bytes." << std::endl;
-    
-    Exception_t e;
-    e.message = stringStream.str();
-    
-    throw (e);
+    AllocationException(__FILE__, __LINE__, compressed_size_);
   }
   
   key_offset_ = num_nodes_ * sizeof(tNode_t);
@@ -184,7 +200,7 @@ XCATPhantomCompress::compress()
 
 // walk through raw phantom and make the rle keys
 void
-XCATPhantomCompress::rle_compress(unsigned char * phantom_buffer, size_t size, std::vector<tKey_t> &key_vector)
+XCATPhantomCompress::rle_compress(unsigned char * phantom_buffer, size_t buffer_size, std::vector<tKey_t> &key_vector)
 {
   // start the loop
   size_t     i;
@@ -193,7 +209,7 @@ XCATPhantomCompress::rle_compress(unsigned char * phantom_buffer, size_t size, s
   memset(&rle_key, 0, sizeof(tKey_t));
   rle_key.voxel_value = phantom_buffer[0];
   
-  for(i = 1; i < size; i++){
+  for(i = 1; i < buffer_size; i++){
 
     if(rle_key.voxel_value ==  phantom_buffer[i]){
       continue;
@@ -211,8 +227,6 @@ XCATPhantomCompress::rle_compress(unsigned char * phantom_buffer, size_t size, s
   // end of loop - push last node
   rle_key.max_voxel = i - 1;    
   key_vector.push_back(rle_key);
-
-
 }
 
 // make the b-tree to contain the rle_keys
@@ -415,14 +429,7 @@ size_t XCATPhantomCompress::WriteCompressedFile()
 
   if(file_buffer == 0){
     // exception
-    std::ostringstream stringStream;
-    stringStream << "Memory exhausted " << std::endl;
-    stringStream << "Failed to allocate " << compressed_size_ + sizeof(header) << " bytes." << std::endl;
-    
-    Exception_t e;
-    e.message = stringStream.str();
-    
-    throw (e);
+    AllocationException(__FILE__, __LINE__, compressed_size_ + sizeof(header));
   }
 
   memcpy(file_buffer, &header, sizeof(header));
@@ -515,6 +522,40 @@ size_t XCATPhantomCompress::WriteDecompressedFile()
   return(total_file_size);
 }
 
+// sets raw_buffer_ and raw_buffer_size_
+void XCATPhantomCompress::rle_uncompress()
+{
+  // we must have a compressed file!
+  assert(compressed_buffer_ != 0);
+
+  // buffer_size is unknown beforehand, so we uncompress to a vector
+  // and then write to buffer  
+  std::vector<unsigned char> voxel_vector;
+  voxel_vector.reserve(phantom_file_size_ * 20);
+  
+  size_t total_file_size = 0;
+  long   total_count = 0;
+  
+  for(unsigned int i = 0; i < num_keys_; i++){
+    tKey_t key = key_buffer_[i];
+
+    long count = 1 + (key.max_voxel - key.min_voxel);
+    unsigned char value = (unsigned char)key.voxel_value;
+
+    voxel_vector.resize(voxel_vector.size()+count, value);
+  }
+
+  raw_size_ =  voxel_vector.size();
+  raw_buffer_ = new unsigned char[raw_size_];
+
+  if(raw_buffer_ == 0){
+    // exception
+    AllocationException(__FILE__, __LINE__, raw_size_);
+  }
+
+  std::copy(voxel_vector.begin(), voxel_vector.end(), raw_buffer_);
+
+}
 
 // test file header to see if the file was written by
 // XCATPhantomCompress
@@ -547,7 +588,7 @@ bool XCATPhantomCompress::check_header(unsigned char * buffer)
 // import an XCATPhantomCompress .rle file
 void XCATPhantomCompress::import_phantom()
 {
-  struct file_header *header = (struct file_header *)phantom_buffer_;
+  struct file_header *header = (struct file_header *)phantom_file_buffer_;
 
   // recreate addresses for incoming phantom from header
   key_offset_  = header->key_offset;
@@ -555,7 +596,7 @@ void XCATPhantomCompress::import_phantom()
   node_buffer_ = header->first_node;
   key_buffer_  = (tKey_t *)(key_offset_ + (unsigned char *)node_buffer_);
 
-  compressed_size_ = phantom_size_ - sizeof(struct file_header);
+  compressed_size_ = phantom_file_size_ - sizeof(struct file_header);
   compressed_buffer_ = new unsigned char[compressed_size_];
 
   num_nodes_   = key_offset_ / sizeof(tNode_t);
@@ -563,17 +604,10 @@ void XCATPhantomCompress::import_phantom()
   
   if(compressed_buffer_ == 0){
     // exception
-    std::ostringstream stringStream;
-    stringStream << "Memory exhausted " << std::endl;
-    stringStream << "Failed to allocate " << compressed_size_ << " bytes." << std::endl;
-    
-    Exception_t e;
-    e.message = stringStream.str();
-    
-    throw (e);
+    AllocationException(__FILE__, __LINE__, compressed_size_);
   }
   
-  memcpy(compressed_buffer_, phantom_buffer_ + sizeof(struct file_header), compressed_size_);
+  memcpy(compressed_buffer_, phantom_file_buffer_ + sizeof(struct file_header), compressed_size_);
 
   // now relocate to compressed buffer addr
   root_ = RelocateCompressionBuffer(compressed_buffer_);

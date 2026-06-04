@@ -90,12 +90,12 @@ namespace catlib {
   /// This is a relocate-able rle/btree compression of an XCAT
   /// Phantom. First the phantom is compressed using RLE then the RLE
   /// keys are stored in a b-tree for fast retrieval The tree_keys and
-  /// btree tree_nodes are concatenated into a buffer for relocation
-  /// (marshaling). The pointers in that buffer are 'relocated' to point
-  /// to the new addresses in that buffer.
+  /// btree tree_nodes are marshaled into a buffer for relocation.
+  /// The pointers in that buffer are 'relocated' to point to the new
+  /// addresses in that buffer.
   ///
   /// The relocated (compressed) buffer may be stored as a file
-  /// (WriteCompressedFile) and later read by this object.
+  /// (WriteCompressedFile) and later read by this class.
   ///
   /// This class manages all memory allocated for itself. N.B.: the class must
   /// persist to preserve memory allocations.
@@ -111,20 +111,23 @@ namespace catlib {
 
     ~XCATPhantomCompress();
 
-    /// CompressFile
+    /// LoadFile
     ///
     /// Load in a phantom file and compress it in memory
     ///
     ///\param XCATFile Path to the phantom file
-    ///\return Returns pointer to head node of the B-Tree
+    ///\param compress_it Set to false to skip compression
+    ///\return true on success
     ///
     /// This method loads a file into the object and produces a
-    /// *compressed buffer* of that file. This is a necessary first
-    /// step before any other methods may be called. The *compressed
+    /// *compressed buffer* of that file. If compress_it is false, it
+    /// also maintains a raw buffer. This is a necessary first step
+    /// before any other methods may be called. The *compressed
     /// buffer* is actually a B-Tree structure marshaled into a
     /// contiguous buffer
     ///
-    tNode_t * CompressFile(std::string XCATFile);
+    bool LoadFile(std::string XCATFile, bool compress_it = true);
+
     
     /// getVoxelValue
     ///
@@ -135,6 +138,28 @@ namespace catlib {
     ///\return Returns the value of the voxel
     ///
     unsigned int getVoxelValue(unsigned long voxel_id, tNode_t * root = 0);
+
+    /// getRawBuffer
+    ///
+    /// Get a pointer to the object's raw buffer. Object manages
+    /// this memory.
+    ///
+    ///\param raw_size Pointer to length of the raw buffer (bytes)
+    ///\return Pointer to the object's raw_buffer
+    ///
+    /// The raw buffer (in the object) may be used in place or it may
+    /// be copied into a new memory location. The caller manages
+    /// memory at that location. This buffer is overwritten by a new call
+    /// to LoadFile().
+    ///
+    unsigned char * getRawBuffer(size_t *raw_size)
+    {
+      if(raw_buffer_ == 0)
+	rle_uncompress();
+      
+      *raw_size = raw_size_;
+      return raw_buffer_;
+    }
 
     /// getCompressedBuffer
     ///
@@ -149,6 +174,7 @@ namespace catlib {
     /// manages memory at that location. Before it can be used at the
     /// new location, the application must call
     /// RelocateCompressionBuffer to adjust pointers in the buffer.
+    /// This buffer is overwritten by a new call to LoadFile().
     ///
     unsigned char * getCompressedBuffer(unsigned long * compressed_size)
     {
@@ -163,12 +189,16 @@ namespace catlib {
     ///\param new_buffer_addr Pointer to the new address of the buffer
     ///\returns Pointer to the new root node of the B-Tree
     ///
-    /// The *compressed buffer* is actually a B-Tree structure which
-    /// contains internal pointers to tree nodes. The *compressed
-    /// buffer* may be copied into a newly allocated location, but
-    /// then it will need to have the internal pointers adjusted to
-    /// that location. This function performs that adjustment and
-    /// returns the new address of the root node.
+    /// After a call to getCompressedBuffer(), a new allocation of
+    /// compressed_size bytes at new_buffer_addr is made. Then a copy
+    /// of the compressed_buffer is made to new_buffer_addr.
+    ///
+    /// The compressed_buffer copied is actually a B-Tree structure
+    /// which contains internal pointers to tree nodes. The
+    /// compressed_buffer may be copied into a newly allocated
+    /// location, but then it will need to have the internal pointers
+    /// adjusted to that location. This function performs that
+    /// adjustment and returns the new address of the root node.
     ///
     tNode_t * RelocateCompressionBuffer(unsigned char * new_buffer_addr);
 
@@ -191,12 +221,12 @@ namespace catlib {
     ///
     size_t  WriteDecompressedFile();
 
-    // raw phantom buffer - just for testing!!!
+    // input phantom buffer - just for testing!!!
     // N.B. XCATFile may be an rle compressed file
-    unsigned char * getPhantomBuffer(unsigned long * phantom_size)
+    unsigned char * getPhantomFileBuffer(unsigned long * phantom_size)
     {
-      *phantom_size = phantom_size_;
-      return phantom_buffer_;
+      *phantom_size = phantom_file_size_;
+      return phantom_file_buffer_;
     }
 
     /// GetMaterialMap
@@ -210,11 +240,6 @@ namespace catlib {
     ///
     std::map<XCATmat_t, long> * GetMaterialMap();
     
-    // test first 64 bytes of file
-    // returns true if the file is XCATPhantomCompressed
-    // false otherwise
-
-
     /// TestFile
     ///
     /// Check to see if file was created by this class.
@@ -240,7 +265,8 @@ namespace catlib {
   private:
     void      reset();
     void      compress();
-    void      rle_compress(unsigned char * phantom_buffer, size_t size, std::vector<tKey_t> & key_vec);
+    void      rle_uncompress();
+    void      rle_compress(unsigned char * phantom_buffer, size_t buffer_size, std::vector<tKey_t> & key_vec);
 
     // make b-tree
     tNode_t * mk_tree(tKey_t  * key_buf, size_t size, std::vector<tNode_t> &node_vec);
@@ -254,11 +280,14 @@ namespace catlib {
 
     std::string     PhantomFile_;
     
-    unsigned char * phantom_buffer_;
-    unsigned long   phantom_size_;
+    unsigned char * phantom_file_buffer_;
+    unsigned long   phantom_file_size_;
     
     unsigned char * compressed_buffer_;
     unsigned long   compressed_size_;
+    
+    unsigned char * raw_buffer_;
+    unsigned long   raw_size_;
     
     unsigned int    num_keys_;
     unsigned int    num_nodes_;

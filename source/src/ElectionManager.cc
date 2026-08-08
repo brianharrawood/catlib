@@ -107,6 +107,7 @@ void ElectionManager::make_inquiry()
   
   // start the inet listening thread
   Lis_Thread_Lock_.Lock();
+
   // this sets 'IPC_Client_Mode_ = true' if socket is in use
   open_listening();  
   
@@ -360,7 +361,7 @@ void ElectionManager::assign_server()
       ServerIpAddress_ = server_id.ip_addr;
       ServerPID_       = server_id.pid;
     }
-    
+
 #if DEBUG > 4
       std::cerr << "The Server ip-addr is  " << server_id.ip_addr << std::endl;
 #endif      
@@ -1069,7 +1070,7 @@ void * ElectionManager::gather_ipc_clients(int sock)
     return NULL;
   }
   
-  if(ServerFound_){
+  if((ServerFound_) && (ServerPID_ != 0)){
     // we know who the server is!
     ipc_client_list_sync_.Unlock();
 
@@ -1092,7 +1093,8 @@ void * ElectionManager::gather_ipc_clients(int sock)
     
     ipc_client_list_.push_back(c_info);
     ipc_client_list_sync_.Unlock();      
-  }
+}
+
   
   return(NULL);
 }
@@ -1184,6 +1186,7 @@ int  ElectionManager::broadcast_message(std::string& message)
       // error
       errorStream << "ERROR - broadcaster: sendto " <<  strerror(errno) << std::endl;      
       errorStream << "Network interface " << ba_itr->ifr_name << " (" << ipstr << ") doesn't permit broadcasting!" << std::endl;
+      errorStream << "Is a VPN running? " << std::endl;
       continue;
     }
     

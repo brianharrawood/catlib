@@ -22,8 +22,29 @@ DistributedRunManager::DistributedRunManager(InputParams * input, bool use_resta
 {
   zero_it();
 
+  if(port == 0)
+    server_port_ = DEFAULT_PORT_NUMBER;
+  else
+    server_port_ = port;
+
   int election_port = server_port_ + 1;
 
+  if(NetKey_.empty()){
+    // exception
+    std::ostringstream stringStream;
+    stringStream << "No Network Key provided!" << std::endl;
+    
+    catlib::Exception_t e;
+    e.message = stringStream.str();
+    
+    throw (e);
+  }
+    
+  if(use_restart)
+    RestartFlag_ = 1;
+  else
+    RestartFlag_ = 0;
+  
   // don't let election get interrupted
   // it can last several seconds
   sigset_t the_set;
@@ -32,61 +53,29 @@ DistributedRunManager::DistributedRunManager(InputParams * input, bool use_resta
   // hold signals - except SIGINT
   pthread_sigmask(SIG_BLOCK, &the_set, NULL);
 
-  if(NetKey_.empty()){
-    // exception
-    std::ostringstream stringStream;
-    stringStream << "No Network Key provided!" << std::endl;
-    
-    catlib::Exception_t e;
-    e.message = stringStream.str();
-    
-    throw (e);
-  }
-    
   // will exit on failure
   election_manager_ = new ElectionManager(NetKey_, election_port);
 
   // release signals
   pthread_sigmask(SIG_UNBLOCK, &the_set, NULL);
 
+  // run_client will need this
   server_name_ = election_manager_->getServerIP();
-  
-  // launch in selected mode
+
+#if 0
   if(election_manager_->isServer())
-    run_server();  
+    std::cerr << "running as server " << std::endl;
   else
-    run_client();
-  
-} 
-
-// run as server
-DistributedRunManager::DistributedRunManager(DRM_mode_t mode, InputParams * input, bool use_restart, std::string key, int port) : inputParams_(input), NetKey_(key)
-{
-  zero_it();
-
-  if(mode != SERVER){
-    // coding mistake
-  }
-  
-  if(NetKey_.empty()){
-    // exception
-    std::ostringstream stringStream;
-    stringStream << "No Network Key provided!" << std::endl;
-    
-    catlib::Exception_t e;
-    e.message = stringStream.str();
-    
-    throw (e);
-  }
-
-  if(use_restart)
-    RestartFlag_ = 1;
-  else
-    RestartFlag_ = 0;
+    std::cerr << "running as client " << std::endl;
+#endif
   
   // hold get next ticket until a TicketManager is registered
+  // see  RegisterTicketManager() in .hh file
   NextTck_Lock_.Lock();
   
+  // caller must create a TickerManager object
+  user_ticket_manager_ = 0;
+
   // only allow one DRM object per process
   std::lock_guard<std::mutex> lock(drm_mutex_);
   if (drm_instance_ == nullptr)
@@ -96,6 +85,18 @@ DistributedRunManager::DistributedRunManager(DRM_mode_t mode, InputParams * inpu
   // posix sigaction? - no stl implementation yet
   std::signal(SIGINT, static_SignalHandler);
   std::signal(SIGTERM, static_SignalHandler);
+
+  // launch in selected mode
+  if(election_manager_->isServer())
+    run_server();  
+  else
+    run_client();
+} 
+
+// run as server
+DistributedRunManager::DistributedRunManager(DRM_mode_t mode, InputParams * input, bool use_restart, std::string key, int port) : inputParams_(input), NetKey_(key)
+{
+  zero_it();
 
   if(port == 0)
     server_port_ = DEFAULT_PORT_NUMBER;
@@ -104,18 +105,8 @@ DistributedRunManager::DistributedRunManager(DRM_mode_t mode, InputParams * inpu
 
   server_name_ = "localhost";
 
-  run_server();  
-
-}
-
-// run as client
-DistributedRunManager::DistributedRunManager(DRM_mode_t mode, InputParams * input, bool use_restart, std::string server, std::string key, int port) :
-  inputParams_(input), NetKey_(key)
-{
-  zero_it();
-
-  if(mode != CLIENT){
-    // coding mistake
+  if(mode != SERVER){
+    ;// assert()
   }
   
   if(NetKey_.empty()){
@@ -135,8 +126,12 @@ DistributedRunManager::DistributedRunManager(DRM_mode_t mode, InputParams * inpu
     RestartFlag_ = 0;
   
   // hold get next ticket until a TicketManager is registered
+  // see  RegisterTicketManager() in .hh file
   NextTck_Lock_.Lock();
   
+  // caller must create a TickerManager object
+  user_ticket_manager_ = 0;
+
   // only allow one DRM object per process
   std::lock_guard<std::mutex> lock(drm_mutex_);
   if (drm_instance_ == nullptr)
@@ -147,6 +142,15 @@ DistributedRunManager::DistributedRunManager(DRM_mode_t mode, InputParams * inpu
   std::signal(SIGINT, static_SignalHandler);
   std::signal(SIGTERM, static_SignalHandler);
 
+  run_server();  
+}
+
+// run as client
+DistributedRunManager::DistributedRunManager(DRM_mode_t mode, InputParams * input, bool use_restart, std::string server, std::string key, int port) :
+  inputParams_(input), NetKey_(key)
+{
+  zero_it();
+
   if(port == 0)
     server_port_ = DEFAULT_PORT_NUMBER;
   else
@@ -154,8 +158,45 @@ DistributedRunManager::DistributedRunManager(DRM_mode_t mode, InputParams * inpu
 
   server_name_ = server;
 
-  run_client();  
+  if(mode != CLIENT){
+    ;// assert()
+  }
+  
+  if(NetKey_.empty()){
+    // exception
+    std::ostringstream stringStream;
+    stringStream << "No Network Key provided!" << std::endl;
+    
+    catlib::Exception_t e;
+    e.message = stringStream.str();
+    
+    throw (e);
+  }
 
+  // server code only! Does nothing in client mode
+  if(use_restart)
+    RestartFlag_ = 1;
+  else
+    RestartFlag_ = 0;
+  
+  // hold get next ticket until a TicketManager is registered
+  // see  RegisterTicketManager() in .hh file
+  NextTck_Lock_.Lock();
+  
+  // caller must create a TickerManager object
+  user_ticket_manager_ = 0;
+
+  // only allow one DRM object per process
+  std::lock_guard<std::mutex> lock(drm_mutex_);
+  if (drm_instance_ == nullptr)
+    drm_instance_ = this;
+  
+  // set up a signalhandler for ^c and sigterm (15)
+  // posix sigaction? - no stl implementation yet
+  std::signal(SIGINT, static_SignalHandler);
+  std::signal(SIGTERM, static_SignalHandler);
+
+  run_client();  
 }
 
 DistributedRunManager::~DistributedRunManager()
@@ -235,8 +276,6 @@ void DistributedRunManager::run_server()
     throw (e);
   }
 
-  // caller must create a TickerManager object
-  user_ticket_manager_ = 0;
 }
 
 void DistributedRunManager::run_client()
@@ -275,8 +314,6 @@ void DistributedRunManager::run_client()
   // makes directories if needed
   init_logging(inputParams_->getOutputDir());
   
-  // caller must create a TickerManager object
-  user_ticket_manager_ = 0;
 }
 
 
@@ -504,8 +541,15 @@ int DistributedRunManager::init_dispatch()
     if( -1 == listen_socket_)
       return(-1);
     
+    // start 'accept' thread
+    Accept_Thread_Lock_.Lock();
+    
     thread_accept(listen_socket_);
-  }
+
+    // wait here for accept thread to begin
+    Accept_Thread_Lock_.Lock();
+    Accept_Thread_Lock_.Unlock();
+}
   else {
     // Client
     // establish connection to the server process
@@ -652,7 +696,7 @@ int DistributedRunManager::start_listening()
     throw (e);
   }
   
-  if (listen(sock, 10)) {
+  if (listen(sock, 512)) {
     int the_error = errno;
     if(the_error == EADDRINUSE){
       std::cerr <<  "Another process is using this port!" << std::endl;
@@ -667,27 +711,22 @@ int DistributedRunManager::start_listening()
 void DistributedRunManager::thread_accept(int sock)
 {
   pthread_attr_t      thread_attr;
-  pthread_mutexattr_t mutex_attr;
-  pthread_mutex_t     the_mutex;
-
   static Arg_t        arg;
 
   pthread_attr_init(&thread_attr);
-  pthread_mutexattr_init(&mutex_attr);
 
   arg.dis = this;
   arg.sock = sock;
-
-  // initialize lock mutexes 
-  pthread_mutex_init(&the_mutex, &mutex_attr);  
 
   // this thread will accept new connections from clients
   int rc = pthread_create(&listen_thread_, &thread_attr, 
 			  wait_for_connection_wrapper, (void *)&arg);
   
-  if(rc != 0)
+  if(rc != 0){
     std::cerr << "Error starting thread " << __FILE__ << ":" << __LINE__ << std::endl;
-
+    Accept_Thread_Lock_.Unlock();
+  }
+  
   // resources freed when thread terminates
   pthread_detach(listen_thread_);
   
@@ -709,6 +748,10 @@ extern "C" void * wait_for_connection_wrapper(void * a)
 
 void * DistributedRunManager::wait_for_connection(int sock)
 {
+  
+  // let caller know we're here
+  Accept_Thread_Lock_.Unlock();
+  
   // wait for new connection forever
   while(1){
     int  sd;
@@ -740,7 +783,7 @@ void * DistributedRunManager::wait_for_connection(int sock)
       
       // this lock assures thread starts up
       // before processing continues
-      GatherReq_Lock_.Lock();
+      GR_Thread_Lock_.Lock();
 
       // this thread will accept new connections from clients
       int rc = pthread_create(&thread_id, &thread_attr, 
@@ -753,8 +796,8 @@ void * DistributedRunManager::wait_for_connection(int sock)
       }
       
       // the request thread is running
-      GatherReq_Lock_.Lock();
-      GatherReq_Lock_.Unlock();
+      GR_Thread_Lock_.Lock();
+      GR_Thread_Lock_.Unlock();
 
       client_info_t c_info;
       c_info.thread_id = thread_id;
@@ -824,7 +867,7 @@ void * DistributedRunManager::gather_requests(int sock)
   int    n = S_BUFFER_LEN; 
 
   // signal we're running
-  GatherReq_Lock_.Unlock();
+  GR_Thread_Lock_.Unlock();
   
   while(1){
     // service new requests from clients
@@ -838,18 +881,23 @@ void * DistributedRunManager::gather_requests(int sock)
     }
 
     // provide new ticket
-    if(strstr(s_buffer, "next_ticket_please"))
+    if(strstr(s_buffer, "next_ticket_please")){
+      NextTck_Lock_.Lock();
       provide_next_ticket(s_buffer, sock);
-    
+      NextTck_Lock_.Unlock();
+    }
     // provide handshake
     else if(strstr(s_buffer, "handshake")){
+      HandShake_Lock_.Lock();
       provide_handshake(s_buffer, sock);
+      HandShake_Lock_.Unlock();
     }
     // provide run parameters
-    else if(strstr(s_buffer, "parameters"))
+    else if(strstr(s_buffer, "parameters")){
+      Parameter_Lock_.Lock();
       provide_parameters(p_buffer, sock);
-
-    
+      Parameter_Lock_.Unlock();
+    } 
     else
       {
 	std::cerr << "SERVER process received unexpected buffer: " << __FILE__ << ":" << __LINE__ << std::endl;
@@ -867,10 +915,6 @@ void DistributedRunManager::provide_handshake(char * buffer, int sock)
   int     n = S_BUFFER_LEN; 
   int     writ;
   
-  // SERVER is threaded!!
-  // lock => HandshakeString
-  HandShake_Lock_.Lock();
-
   std::string clientHandshake(buffer);
   
   // zero buffer
@@ -897,11 +941,9 @@ void DistributedRunManager::provide_handshake(char * buffer, int sock)
   
   if(writ != n){
     std::cerr <<  "error writing to client: " << __FILE__ << ":" << __LINE__ << std::endl;
-    HandShake_Lock_.Unlock();
     return;
   }
   
-  HandShake_Lock_.Unlock();
 }
 
 // previous finished ticket returned from client
@@ -913,8 +955,6 @@ void DistributedRunManager::provide_next_ticket(char * buffer, int sock)
   char c_host[HOST_LEN];
   char c_pid[PID_LEN];
   
-  NextTck_Lock_.Lock();
-
   Ticket  * client_ticket = user_ticket_manager_->GetNewTicket();
 
   // unpack finished ticket buffer to ticket
@@ -941,11 +981,9 @@ void DistributedRunManager::provide_next_ticket(char * buffer, int sock)
   if(writ != S_BUFFER_LEN){
     // error - Throw Exception??
     std::cerr <<  "error writing to client: " << __FILE__ << ":" << __LINE__ << std::endl;
-    NextTck_Lock_.Unlock();
     return;
   }
 
-  NextTck_Lock_.Unlock();
 }
 
 void DistributedRunManager::provide_parameters(char * buffer, int sock)
@@ -953,9 +991,6 @@ void DistributedRunManager::provide_parameters(char * buffer, int sock)
   int  n = P_BUFFER_LEN; 
   int  writ;
   
-  // SERVER is threaded!!
-  Parameter_Lock_.Lock();
-
   memset(buffer, 0, n);
 
   std::stringstream params;
@@ -978,8 +1013,6 @@ void DistributedRunManager::provide_parameters(char * buffer, int sock)
     // error - Throw Exception??
     std::cerr <<  "error writing to client: " << __FILE__ << ":" << __LINE__ << std::endl;
   }
-
-  Parameter_Lock_.Unlock();
 
 }
 
@@ -1500,7 +1533,10 @@ void DistributedRunManager::mv_restart_file()
   // else
   std::string command = "mv -f " + restart_file + " " + the_file_name;
 
-  system(command.c_str());
+  int rc = system(command.c_str());
+
+  if(rc == -1)
+    std::cerr << "The command '" << command << "' failed to execute!" << std::endl;
 
   return;
 }

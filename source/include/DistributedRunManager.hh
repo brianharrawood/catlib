@@ -290,7 +290,8 @@ namespace catlib {
     int                number_of_tickets_;
     
     // synchronization
-    catlib::SyncLock  GatherReq_Lock_; // to start gather_request
+    catlib::SyncLock  Accept_Thread_Lock_; // to start accept thread
+    catlib::SyncLock  GR_Thread_Lock_; // to start gather_request thread
     catlib::SyncLock  FD_Lock_;        // file descriptor lock
     catlib::SyncLock  CL_Lock_;        // client list lock
     catlib::SyncLock  Ticket_Lock_;    // get ticket lock

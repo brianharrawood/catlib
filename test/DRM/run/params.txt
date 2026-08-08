@@ -1,7 +1,0 @@
-output_dir:         ./the_output
-#PointsPerTicket: 1e8
-PointsPerTicket: 10000
-NumberOfTickets: 100
-PointSpecs: {red, 0.25, 2}
-PointSpecs: {blue, 0.15, 1}
-PointSpecs: {green, 0.50, 3}

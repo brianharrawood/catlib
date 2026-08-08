@@ -41,6 +41,7 @@ void do_an_estimate(int ticket_number, void * arg)
 
 void get_random_point(double *x, double *y)
 {
+#if 1
   uint32_t upper_bound = 1000000000;
 
   // uniform random < upper_bound
@@ -49,7 +50,8 @@ void get_random_point(double *x, double *y)
 
   uint32_t yi = arc4random_uniform(upper_bound);
   *y = yi/(double)upper_bound;
-
+#endif
+  
 }
 
 void write_result(double pi_estimate, int ticket_number, std::string output_directory)

@@ -24,7 +24,7 @@ add_executable(DRMtest ${sources} ${headers})
 
 # old ubuntu (22.04) needs libbsd
 # if osrelease < Ubuntu 24.04.4
-# target_link_libraries(DRMtest ${catlib_library} bsd crypto pthread z)
+#target_link_libraries(DRMtest ${catlib_library} bsd crypto pthread z)
 #else
 target_link_libraries(DRMtest ${catlib_library} crypto pthread z)
 

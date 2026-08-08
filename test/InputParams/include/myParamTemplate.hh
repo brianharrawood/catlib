@@ -19,10 +19,10 @@ const std::vector<ParamTemplate> my_templates =
   {
     // DRM test
     // tag name            data_t   single tag_t
-    {"PointOnLine",        float_T, true,  app_T},  // floating point type
-    {"NumberOfPoints",       int_T, true,  app_T},  // integer type
-    {"Names",               user_T, false, app_T},  // string type (false == allow multiple, so app_T means user writes hander)
-    {"Voter",               user_T, false, app_T},  // string type (false == allow multiple, so app_T means user writes hander)
+    ParamTemplate{"PointOnLine",        float_T, true,  app_T},  // floating point type
+    ParamTemplate{"NumberOfPoints",       int_T, true,  app_T},  // integer type
+    ParamTemplate{"Names",               user_T, false, app_T},  // string type (false == allow multiple, so app_T means user writes hander)
+    ParamTemplate{"Voter",               user_T, false, app_T},  // string type (false == allow multiple, so app_T means user writes hander)
   };
 
 #endif
